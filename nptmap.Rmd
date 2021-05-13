@@ -1,0 +1,161 @@
+---
+title: "Northville-Placid Trail"
+author: "Nathan Hoteling"
+date: "5/13/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(reshape2)
+
+library(ggridges)
+library(rgdal)
+library(raster)
+library(magick)
+library(plotKML)
+library(rayshader)
+
+library(RcppRoll)
+```
+
+## Data
+
+There are basically three different data files used here:  
+1. The elevation profile, obtained from [Earth Explorer](https://earthexplorer.usgs.gov)  
+2. Northville-Placid Trail coordinates, obtained from [The Hiking Project](https://www.hikingproject.com/trail/7004949/npt-northville-placid-trail)  
+3. Adirondack Park Boundary, obtained from [Adirondack Park Agency](https://apa.ny.gov/gis/)  
+
+The Earth Explorer data were downloaded as separate files and merged together, with `raster` and `rgdal` packages in R.  The NPT coordinates were read directly from the downloaded GPX file, and the ADK park boundary was read directly from the KML.  An image of the NPT trail marker was downloaded from somewhere to spice up the map display.
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+# Get the code for the appropriate UTM zone
+# See README file for how we get the epsg code
+epsg <- make_EPSG()
+prj4 <- epsg$prj4[ epsg$code==2032 ]
+crd.new <- CRS(prj4[1])
+
+
+#-----------------------------------
+#  Elevation profile data comes from Geotif files
+#  downloaded from  https://earthexplorer.usgs.gov
+#  and merged together with gdal command-line tools.
+#  (see README file for more details)
+#
+
+tifname <- "data/adk_3arc_merged.tif"    # 17.3 MB  3601x2401 pixels  ***
+localtif = raster::raster(tifname)
+elmat <- raster_to_matrix(localtif)
+
+# NPT logo image
+imgNPT <- as.raster(image_read("data/npt-image-v02.png"))
+
+#-------------------------------------
+#  Adirondack Park Border
+#
+shp.adk <- readOGR("data/Adirondack_Park_Boundary.kml")
+
+#-----------------------------------
+#  Northville-Placid Trail coordinates
+#  GPX file downloaded from hikingproject(?)
+#
+route <- plotKML::readGPX("data/npt-northville-placid-trail.gpx")
+npt <- data.frame("lon"=route$tracks[[1]]$'NPT (Northville-Placid Trail)'$lon,
+                  "lat"=route$tracks[[1]]$'NPT (Northville-Placid Trail)'$lat,
+                  "ele"=as.numeric(route$tracks[[1]]$'NPT (Northville-Placid Trail)'$ele),
+                  "time"=as.character(route$tracks[[1]]$'NPT (Northville-Placid Trail)'$time))
+```
+
+## Static Map with R
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#------------------------------------------
+# Create ridgeplot from Geotif
+# --> Part of this comes from rayshader tutorial
+# by elizabeth easter
+#
+xmin <- localtif@extent@xmin
+ymin <- localtif@extent@ymin
+xmax <- localtif@extent@xmax
+ymax <- localtif@extent@ymax
+xh <- (xmax-xmin)/2
+yh <- (ymax-ymin)/2
+
+df.pts <- SpatialPoints(cbind(c(xmin,xmax),c(ymin,ymax)), proj4string=CRS(proj4string(localtif)))
+df.pts2 <- spTransform(df.pts,crd.new)
+crd <- coordinates(df.pts2)
+asp.rto <- (crd[4]-crd[3]) / (crd[2]-crd[1])
+
+# Use roll_mean() from RcppRoll package
+N <- 10  # number of points to include for rolling average
+r_elmat <- roll_mean(elmat, n=N,fill=NA,align="center")
+t_elmat <- roll_mean(t(r_elmat),n=N,fill=NA,align="center")
+x_telmat <- t_elmat[seq(from=1,to=nrow(t_elmat),by=N),seq(from=1,to=ncol(t_elmat),by=N)]
+
+lat_val <- rev((1:localtif@nrows)*res(localtif)[1]+ymin)
+r_lat_val <- roll_mean(lat_val,n=N,fill=NA,align="center")
+x_lat_val <- r_lat_val[seq(from=1,to=length(r_lat_val),by=N)]
+lon_val <- (1:localtif@ncols)*res(localtif)[2]+xmin
+r_lon_val <- roll_mean(lon_val,n=N,fill=NA,align="center")
+x_lon_val <- r_lon_val[seq(from=1,to=length(r_lon_val),by=N)]
+
+df.telmat <- data.frame(x_telmat)
+names(df.telmat) <- x_lon_val
+df.telmat$lat <- x_lat_val
+md.telmat <- melt(df.telmat, id=c("lat"))
+
+df.adk <- md.telmat[complete.cases(md.telmat),]
+df.adk$lon <- as.numeric(as.character(df.adk$variable))
+df.adk$value2 <- df.adk$value
+df.adk$value2[df.adk$value==0] <- NA
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#--------------------------------------------
+# Make plot
+#
+
+
+
+rstr.xmin <- -75.92
+rstr.xmax <- -75.62
+rstr.ymin <- 44.72
+rstr.ymax <- rstr.ymin+(rstr.xmax-rstr.xmin)*0.75 #asp.rto
+
+banner <- data.frame(id="banner",x=c(-75.92,-75.92,-74.72,-74.72),
+y=c(44.72,rstr.ymax+0.02,rstr.ymax+0.02,44.72))
+
+p.rdg <- ggplot(df.adk) +
+  geom_density_ridges(aes(x=lon,y=lat,height=value2,group=lat),
+                      stat="identity", scale=8, color="grey45",size=0.3,fill=NA) +
+  geom_polygon(data=banner, aes(x=x,y=y),fill="#fff1e5",color="grey65",size=1.0) +
+  geom_path(data=shp.adk, aes(x=long,y=lat,group=group),
+            color="darkgreen",size=1.0,alpha=0.3) +
+  geom_path(data=npt, aes(x=lon,y=lat), color="steelblue",size=0.65,alpha=0.8) +
+  annotation_raster(imgNPT,rstr.xmin,rstr.xmax,rstr.ymin,rstr.ymax,interpolate=TRUE) +
+  annotate("text",x=rstr.xmin+0.3,y=rstr.ymin,label="Northville-Placid\nTrail",
+           color="grey20",hjust=0.0,vjust=-0.18,size=4.5,family="Optima",fontface="bold") +
+  theme_void() +
+  theme(panel.background=element_rect(fill="#fff1e5"),
+        plot.background=element_rect(fill="#fff1e5"),
+        aspect.ratio=asp.rto)
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, out.width="90%"}
+p.rdg
+```
+
+## Interactive Map with D3
+
+```{r}
+d.data <- list(ele=df.adk, npt=npt)
+dd <- jsonlite::toJSON(d.data)
+```
+
