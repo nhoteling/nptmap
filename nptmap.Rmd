@@ -12,15 +12,18 @@ library(ggplot2)
 library(dplyr)
 library(tidyr)
 library(reshape2)
+library(lubridate)
 
 library(ggridges)
 library(rgdal)
 library(raster)
-library(magick)
-library(plotKML)
-library(rayshader)
+library(magick)    # image manipulations
+library(plotKML)   # Read the KML?
+library(rayshader) # elevation matrix stuff
+library(RcppRoll)  # smoothing ele profile for ridgeline
 
-library(RcppRoll)
+library(r2d3)
+library(jsonlite)
 ```
 
 ## Data
@@ -67,7 +70,7 @@ route <- plotKML::readGPX("data/npt-northville-placid-trail.gpx")
 npt <- data.frame("lon"=route$tracks[[1]]$'NPT (Northville-Placid Trail)'$lon,
                   "lat"=route$tracks[[1]]$'NPT (Northville-Placid Trail)'$lat,
                   "ele"=as.numeric(route$tracks[[1]]$'NPT (Northville-Placid Trail)'$ele),
-                  "time"=as.character(route$tracks[[1]]$'NPT (Northville-Placid Trail)'$time))
+                  "time"=as.character(floor_date(ymd_hms(route$tracks[[1]]$'NPT (Northville-Placid Trail)'$time), unit="minutes")))
 ```
 
 ## Static Map with R
@@ -116,7 +119,7 @@ df.adk$value2[df.adk$value==0] <- NA
 ```
 
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, echo=FALSE, message=FALSE, warning=FALSE, eval=TRUE}
 #--------------------------------------------
 # Make plot
 #
@@ -148,14 +151,24 @@ p.rdg <- ggplot(df.adk) +
 
 ```
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE, out.width="90%"}
+```{r, echo=FALSE, message=FALSE, warning=FALSE, out.width="90%", eval=TRUE}
 p.rdg
 ```
+<br>
+<br>
 
 ## Interactive Map with D3
 
-```{r}
-d.data <- list(ele=df.adk, npt=npt)
+```{r, echo=FALSE}
+d.data <- list(adk=df.adk, npt=npt)
 dd <- jsonlite::toJSON(d.data)
+write(dd,"data/npt-map.json")
+r2d3(data=dd, 
+     script="js/npt-map.js", 
+     container="div",
+     dependencies = c("js/d3-simple-slider.min.js"),
+     height=400)
 ```
 
+<br>
+<br>
