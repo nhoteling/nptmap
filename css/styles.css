@@ -1,0 +1,41 @@
+.container1 {
+   float: none;
+   margin: 0;
+   padding: 0;
+}
+
+.map-container {
+  float: none;
+    margin: 0;
+    padding: 10px;
+    background-color: #ffffff;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.15), 0 0 3px 0 rgba(0,0,0,0.1);
+    border-radius: 7px;
+}
+
+.trail-marker {
+  fill: #4682b4;
+}
+
+.npt-path {
+  fill: none;
+  stroke: #4682b4;
+  stroke-width: 1.25;
+  opacity: 1.0;
+}
+
+
+.adk-path {
+  fill: #f5f5f5;
+  stroke: #606060;
+  stroke-width: 0.2;
+  stroke-opacity: 1.0;
+  fill-opacity: 1.0;
+}
+
+.adk-border {
+  fill: none;
+  stroke: #006400;
+  stroke-width: 2.0;
+  opacity: 0.3;
+}

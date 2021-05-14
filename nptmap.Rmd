@@ -21,6 +21,7 @@ library(magick)    # image manipulations
 library(plotKML)   # Read the KML?
 library(rayshader) # elevation matrix stuff
 library(RcppRoll)  # smoothing ele profile for ridgeline
+library(sf)
 
 library(r2d3)
 library(jsonlite)
@@ -34,6 +35,8 @@ There are basically three different data files used here:
 3. Adirondack Park Boundary, obtained from [Adirondack Park Agency](https://apa.ny.gov/gis/)  
 
 The Earth Explorer data were downloaded as separate files and merged together, with `raster` and `rgdal` packages in R.  The NPT coordinates were read directly from the downloaded GPX file, and the ADK park boundary was read directly from the KML.  An image of the NPT trail marker was downloaded from somewhere to spice up the map display.
+
+Several R packages were used to manipulate the data, but mostly `rgdal`, `raster`, `magick`, `rayshader`, and `RcppRoll` to get the terrain data into a form to use `ggridges`.  The static map was made with `ggplot2` and `r2d3` was used to render the D3 visualization.
 
 ```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
 # Get the code for the appropriate UTM zone
@@ -136,8 +139,8 @@ y=c(44.72,rstr.ymax+0.02,rstr.ymax+0.02,44.72))
 
 p.rdg <- ggplot(df.adk) +
   geom_density_ridges(aes(x=lon,y=lat,height=value2,group=lat),
-                      stat="identity", scale=8, color="grey45",size=0.3,fill=NA) +
-  geom_polygon(data=banner, aes(x=x,y=y),fill="#fff1e5",color="grey65",size=1.0) +
+                      stat="identity", scale=10, color="#606060",size=0.1,fill=NA) +
+  geom_polygon(data=banner, aes(x=x,y=y),fill="#f5f5f5",color="grey65",size=1.0) +
   geom_path(data=shp.adk, aes(x=long,y=lat,group=group),
             color="darkgreen",size=1.0,alpha=0.3) +
   geom_path(data=npt, aes(x=lon,y=lat), color="steelblue",size=0.65,alpha=0.8) +
@@ -145,13 +148,13 @@ p.rdg <- ggplot(df.adk) +
   annotate("text",x=rstr.xmin+0.3,y=rstr.ymin,label="Northville-Placid\nTrail",
            color="grey20",hjust=0.0,vjust=-0.18,size=4.5,family="Optima",fontface="bold") +
   theme_void() +
-  theme(panel.background=element_rect(fill="#fff1e5"),
-        plot.background=element_rect(fill="#fff1e5"),
+  theme(panel.background=element_rect(fill= "#ffffff", color="grey80"), #  "#fff1e5"),
+        plot.background=element_rect(fill= "#f5f5f5"), # "#fff1e5"),
         aspect.ratio=asp.rto)
 
 ```
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE, out.width="90%", eval=TRUE}
+```{r, echo=FALSE, message=FALSE, warning=FALSE, out.width="85%", eval=TRUE, fig.align='left'}
 p.rdg
 ```
 <br>
@@ -160,15 +163,26 @@ p.rdg
 ## Interactive Map with D3
 
 ```{r, echo=FALSE}
-d.data <- list(adk=df.adk, npt=npt)
+border <- st_multilinestring( st_as_sf(shp.adk)$geometry ) %>% st_polygonize()
+df.border <- as.data.frame(st_coordinates(border[[1]])) %>% 
+  dplyr::select(X,Y) %>% 
+  rename(lon=X, lat=Y)
+df.adk <- df.adk %>% arrange(lat,desc(lon))
+d.data <- list(adk=df.adk, npt=npt, brd=df.border)
 dd <- jsonlite::toJSON(d.data)
 write(dd,"data/npt-map.json")
 r2d3(data=dd, 
      script="js/npt-map.js", 
      container="div",
+     css = "css/styles.css",
      dependencies = c("js/d3-simple-slider.min.js"),
-     height=400)
+     height=600,
+     width=650)
 ```
 
+<br>
+<br>
+<br>
+<br>
 <br>
 <br>
