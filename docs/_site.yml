@@ -1,0 +1,10 @@
+name: "Northville-Placid Trail"
+navbar:
+  title: "NPT"
+output_dir: "."
+output:
+  html_document:
+    theme: yeti
+    highlight: textmate
+#    include:
+#      after_body: _footer.html
