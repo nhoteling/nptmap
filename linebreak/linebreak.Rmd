@@ -1,0 +1,90 @@
+---
+title: "LineBreak"
+author: "Nathan Hoteling"
+date: "12/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(sf)
+library(purrr)
+library(dplyr)
+library(ggplot2)
+```
+
+## Question
+
+I want to convert a collection of ordered points into segments based on some arbitrary external parameter.
+
+## Solution
+
+First, set up some convenience functions that we will use later.
+
+```{r}
+############### A couple of convenience functions
+make_point <- function(lon, lat) {
+  sf::st_point(c(lon, lat)) 
+}
+make_line <- function(crds) {
+  crds %>% as.matrix() %>% sf::st_linestring()
+}
+```
+
+Now, create some sample data,
+
+```{r}
+############### Set up the df with simulated data
+x <- c(1,3,2,4,1,100,6,2,3,5,1,135,4,4,7,1)
+N <- length(x)
+dfx <- data.frame(idx = 1:length(x), x=x, 
+                  lon = rnorm(N, mean=-76, sd=1), 
+                  lat = rnorm(N, mean=35, sd=1)) %>%
+  mutate(geometry = purrr::map2(lon, lat, make_point) %>% sf::st_sfc())
+
+THRESH <- 100   # threshold value for splitting
+```
+
+Finally, do the business,
+
+```{r, message=FALSE}
+############## Do the business
+df.new <- dfx %>%
+  mutate(z    = purrr::map_dbl(x, function(x) {ifelse(x>=THRESH,1,0)}),  # mark values that exceed threshold
+         grp  = cumsum(z)) %>%                                           # label groups
+  group_by(grp) %>%                                                      # divide into groups
+  summarise(m = sf::st_coordinates(geometry)) %>% tidyr::nest() %>%      # create nested groups
+  mutate(ln = purrr::map(data, make_line) %>% sf::st_sfc()) %>%          # make lines from nested groups
+  dplyr::select(-data)                                                   # discard unwanted cols
+```
+
+
+
+```{r, echo=FALSE}
+p <- ggplot(df.new) +
+  geom_sf(aes(geometry=ln, color=as.factor(grp))) +
+  theme_minimal()
+```
+
+Better yet, we can pack the business into a function and simply call that,
+
+```{r}
+# OR - Pack it into a single function!
+line_splitter <- function(pts, v, thresh) {
+  if (length(pts) != length(v)) {stop("pts and v must be the same length!")}
+  data.frame(geometry=pts, v=v) %>%
+    mutate(z = purrr::map_dbl(v, function(x) {ifelse(x>=thresh, 1, 0)}),
+           g = cumsum(z)) %>%
+    group_by(g) %>%
+    summarise(m = sf::st_coordinates(geometry)) %>% tidyr::nest() %>%          
+    mutate(ln = purrr::map(data, make_line) %>% sf::st_sfc()) %>% 
+    dplyr::select(g,ln)                                                      
+}
+
+df.new2 <- line_splitter(dfx$geometry, dfx$x, THRESH)
+```
+
+
+
+
+

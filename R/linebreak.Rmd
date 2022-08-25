@@ -1,0 +1,40 @@
+---
+title: "LineBreak"
+author: "Nathan Hoteling"
+date: "12/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(sf)
+library(purrr)
+library(dplyr)
+```
+
+## Set up
+
+```{r}
+nptrail <- sf::st_read("data/")
+
+
+diff <- c(1,3,2,4,1,100,6,2,3,5,1,135,4,4,7,1)
+N <- length(diff)
+lon <- rnorm(N, mean=-76, sd=3)
+lat <- rnorm(N, mean=35, sd=1)
+make_point <- function(lon, lat) {
+  sf::st_point(c(lon, lat)) 
+}
+make_line <- function(crds) {
+  crds %>% as.matrix() %>% sf::st_linestring()
+}
+
+df <- data.frame(idx=1:length(v), diff=diff) %>%
+  mutate(geometry = purrr::map2(lon, lat, make_point) %>% sf::st_sfc(),
+         z        = purrr::map_dbl(diff, function(x) {ifelse(x>=100,1,0)}),
+         grp      = cumsum(z)) %>%
+  group_by(grp) %>%
+  summarise(m = sf::st_coordinates(geometry)) %>% nest() %>%
+  mutate(ln = purrr::map(data, make_line) %>% sf::st_sfc())
+```
+

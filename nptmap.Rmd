@@ -186,3 +186,17 @@ r2d3(data=dd,
 <br>
 <br>
 <br>
+## References
+
+This tutorial from Elizabeth Easter was incredibly helpful:  
+https://www.elizabetheaster.com/blog/2019/07/19/GPS_Routes_Plotted_on_Realistic_3D_Map  
+
+Rayshader:  
+https://www.rayshader.com/  
+
+R2D3:
+https://rstudio.github.io/r2d3/  
+
+d3-simple-slider:  
+https://www.npmjs.com/package/d3-simple-slider/v/1.4.1  
+
